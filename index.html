@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>UTM-генератор Hollywool</title>
+<style>
+  :root { --bg:#f5f6f8; --panel:#fff; --line:#dde3e8; --accent:#1f5f99; --muted:#6b7480; --good:#1f7a4d; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:#182026;
+    font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif; }
+  main { max-width:760px; margin:0 auto; padding:28px 16px 60px; }
+  h1 { margin:0 0 4px; font-size:24px; }
+  .sub { color:var(--muted); margin-bottom:20px; }
+  .card { background:var(--panel); border:1px solid var(--line);
+    border-radius:10px; padding:18px; margin-bottom:18px; }
+  label { display:block; font-weight:600; margin:12px 0 4px; }
+  input, select, textarea { width:100%; padding:10px; font:inherit;
+    border:1px solid var(--line); border-radius:7px; background:#fff; }
+  textarea { resize:vertical; word-break:break-all; }
+  .row { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  button { margin-top:14px; background:var(--accent); color:#fff; border:0;
+    border-radius:8px; padding:11px 16px; font:inherit; font-weight:600; cursor:pointer; }
+  button.secondary { background:#eef2f5; color:#182026; }
+  button:hover { filter:brightness(1.05); }
+  .result { display:none; }
+  .result textarea { background:#f0f7f1; }
+  .copied { color:var(--good); font-weight:600; margin-left:10px; }
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  th, td { text-align:left; padding:7px 8px; border-bottom:1px solid var(--line);
+    vertical-align:top; }
+  th { color:var(--muted); font-weight:600; }
+  td.u { word-break:break-all; }
+  code { background:#eef2f5; padding:1px 5px; border-radius:4px; }
+  .empty { color:var(--muted); font-style:italic; }
+  @media (max-width:560px){ .row{ grid-template-columns:1fr; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>UTM-генератор</h1>
+  <div class="sub">Ссылки для постов SMM. Уникальный <code>utm_content</code> подставится автоматически —
+    из ссылки поста или сгенерируется.</div>
+
+  <form class="card" id="form" onsubmit="return generate(event)">
+    <label for="url">Ссылка на товар / категорию / бренд (hollywool.ru…)</label>
+    <input id="url" name="url" required
+      placeholder="https://hollywool.ru/catalog/pryazha/bc-garn-alba/">
+
+    <div class="row">
+      <div>
+        <label for="source">Площадка</label>
+        <select id="source">
+          <option value="vk">vk</option>
+          <option value="telegram" selected>telegram</option>
+          <option value="max">max</option>
+          <option value="instagram">instagram</option>
+          <option value="youtube">youtube</option>
+        </select>
+      </div>
+      <div>
+        <label for="campaign">Кампания (utm_campaign)</label>
+        <input id="campaign" value="hollywool">
+      </div>
+    </div>
+
+    <label for="post_url">Ссылка на пост (необязательно) — из неё возьмём id</label>
+    <input id="post_url" placeholder="https://t.me/Hollywool/15353 или vk.com/wall-94246095_18952">
+
+    <label for="content">utm_content (id поста) — оставьте пустым для авто</label>
+    <input id="content" placeholder="авто: tg15353 / vk18952 / telegram20260629…">
+
+    <button type="submit">Сгенерировать ссылку</button>
+  </form>
+
+  <div class="card result" id="resultCard">
+    <label id="resultLabel">Готовая ссылка</label>
+    <textarea id="out" readonly rows="3"></textarea>
+    <button type="button" onclick="copyLink()">Скопировать</button>
+    <span class="copied" id="copied"></span>
+  </div>
+
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+      <h2 style="margin:0;font-size:17px;">История (на этом устройстве)</h2>
+      <button class="secondary" type="button" onclick="clearHistory()" style="margin:0;padding:6px 10px;">Очистить</button>
+    </div>
+    <div id="historyWrap"></div>
+  </div>
+</main>
+
+<script>
+const SOURCES = ["vk","telegram","max","instagram","youtube"];
+
+function buildUtmUrl(url, {source, medium="social", campaign="hollywool", content, term}={}) {
+  let raw = (url || "").trim();
+  if (raw && !/:\/\//.test(raw)) raw = "https://" + raw;
+  const u = new URL(raw);
+  [...u.searchParams.keys()].forEach(k => { if (/^utm_/i.test(k)) u.searchParams.delete(k); });
+  u.searchParams.set("utm_source", source);
+  u.searchParams.set("utm_medium", medium);
+  u.searchParams.set("utm_campaign", campaign);
+  if (content) u.searchParams.set("utm_content", content);
+  if (term) u.searchParams.set("utm_term", term);
+  u.pathname = u.pathname.replace(/\/+$/, "") || "/";
+  return u.toString();
+}
+
+function extractPostId(postUrl) {
+  if (!postUrl) return null;
+  let m = postUrl.match(/t\.me\/[^/]+\/(\d+)/);
+  if (m) return "tg" + m[1];
+  m = postUrl.match(/wall-?\d+_(\d+)/);
+  if (m) return "vk" + m[1];
+  return null;
+}
+
+function autoContentId(source) {
+  const d = new Date();
+  const pad = n => String(n).padStart(2,"0");
+  const ts = d.getUTCFullYear()+pad(d.getUTCMonth()+1)+pad(d.getUTCDate())+pad(d.getUTCHours())+pad(d.getUTCMinutes());
+  const rnd = Math.random().toString(16).slice(2,6);
+  return source + ts + rnd;
+}
+
+function generate(event) {
+  event.preventDefault();
+  const url = document.getElementById("url").value.trim();
+  if (!url) return false;
+  const source = document.getElementById("source").value;
+  const campaign = document.getElementById("campaign").value.trim() || "hollywool";
+  const postUrl = document.getElementById("post_url").value.trim();
+  const contentField = document.getElementById("content").value.trim();
+  const content = contentField || extractPostId(postUrl) || autoContentId(source);
+  const tagged = buildUtmUrl(url, {source, campaign, content});
+
+  document.getElementById("out").value = tagged;
+  document.getElementById("resultLabel").innerHTML =
+    "Готовая ссылка (utm_content = <code>" + escapeHtml(content) + "</code>)";
+  document.getElementById("resultCard").style.display = "block";
+
+  saveHistory({ts: new Date().toISOString(), source, content, url: tagged});
+  return false;
+}
+
+function copyLink() {
+  const out = document.getElementById("out");
+  navigator.clipboard.writeText(out.value).then(() => {
+    const s = document.getElementById("copied");
+    s.textContent = "скопировано ✓";
+    setTimeout(() => s.textContent = "", 1800);
+  });
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+}
+
+function loadHistory() {
+  try { return JSON.parse(localStorage.getItem("utm_history") || "[]"); }
+  catch (e) { return []; }
+}
+function saveHistory(item) {
+  const items = loadHistory();
+  items.push(item);
+  const trimmed = items.slice(-100);
+  localStorage.setItem("utm_history", JSON.stringify(trimmed));
+  renderHistory();
+}
+function clearHistory() {
+  if (!confirm("Очистить историю на этом устройстве?")) return;
+  localStorage.removeItem("utm_history");
+  renderHistory();
+}
+function renderHistory() {
+  const items = loadHistory().slice().reverse().slice(0,15);
+  const wrap = document.getElementById("historyWrap");
+  if (!items.length) { wrap.innerHTML = '<div class="empty">пока пусто</div>'; return; }
+  wrap.innerHTML = '<table><thead><tr><th>Когда</th><th>Площадка</th><th>utm_content</th><th>Ссылка</th></tr></thead><tbody>'
+    + items.map(it => {
+        const when = (it.ts||"").slice(0,16).replace("T"," ");
+        return '<tr><td>'+escapeHtml(when)+'</td><td>'+escapeHtml(it.source)+'</td>'
+          + '<td><code>'+escapeHtml(it.content)+'</code></td>'
+          + '<td class="u">'+escapeHtml(it.url)+'</td></tr>';
+      }).join("")
+    + '</tbody></table>';
+}
+renderHistory();
+</script>
+</body>
+</html>
