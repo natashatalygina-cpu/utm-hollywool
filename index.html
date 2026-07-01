@@ -23,6 +23,9 @@
     border-radius:8px; padding:11px 16px; font:inherit; font-weight:600; cursor:pointer; }
   button.secondary { background:#eef2f5; color:#182026; }
   button:hover { filter:brightness(1.05); }
+  button.secondary { background:#eef2f5; color:#182026; margin-left:8px; }
+  .muted { color:var(--muted); font-weight:400; }
+  #outShort { background:#f0f7f1; }
   .result { display:none; }
   .result textarea { background:#f0f7f1; }
   .copied { color:var(--good); font-weight:600; margin-left:10px; }
@@ -79,6 +82,10 @@
     <textarea id="out" readonly rows="3"></textarea>
     <button type="button" onclick="copyLink()">Скопировать</button>
     <span class="copied" id="copied"></span>
+    <label style="margin-top:14px;">Короткая ссылка <span class="muted">(через clck.ru)</span></label>
+    <input id="outShort" readonly placeholder="сокращаю…">
+    <button type="button" class="secondary" onclick="copyShort()">Скопировать короткую</button>
+    <span class="copied" id="shortCopied"></span>
   </div>
 
   <div class="card">
@@ -139,8 +146,36 @@ function generate(event) {
     "Готовая ссылка (utm_content = <code>" + escapeHtml(content) + "</code>)";
   document.getElementById("resultCard").style.display = "block";
 
+  shortenLink(tagged);
   saveHistory({ts: new Date().toISOString(), source, content, url: tagged});
   return false;
+}
+
+async function shortenLink(longUrl) {
+  const field = document.getElementById("outShort");
+  const note = document.getElementById("shortCopied");
+  field.value = "сокращаю…";
+  note.textContent = "";
+  try {
+    const r = await fetch("https://clck.ru/--?url=" + encodeURIComponent(longUrl));
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    const text = (await r.text()).trim();
+    if (!/^https?:\/\//.test(text)) throw new Error("bad response");
+    field.value = text;
+  } catch (e) {
+    field.value = "";
+    note.textContent = "не удалось сократить (clck.ru недоступен)";
+  }
+}
+
+function copyShort() {
+  const v = document.getElementById("outShort").value;
+  if (!v || !/^https?:\/\//.test(v)) return;
+  navigator.clipboard.writeText(v).then(() => {
+    const s = document.getElementById("shortCopied");
+    s.textContent = "скопировано ✓";
+    setTimeout(() => s.textContent = "", 1800);
+  });
 }
 
 function copyLink() {
