@@ -103,7 +103,6 @@ function buildUtmUrl(url, {source, medium="social", campaign="hollywool", conten
   u.searchParams.set("utm_campaign", campaign);
   if (content) u.searchParams.set("utm_content", content);
   if (term) u.searchParams.set("utm_term", term);
-  u.pathname = u.pathname.replace(/\/+$/, "") || "/";
   return u.toString();
 }
 
