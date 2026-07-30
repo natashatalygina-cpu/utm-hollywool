@@ -60,6 +60,7 @@
           <option value="instagram">instagram</option>
           <option value="email">email (рассылки)</option>
           <option value="youtube">youtube</option>
+          <option value="dzen">dzen (Дзен)</option>
         </select>
       </div>
       <div>
@@ -69,10 +70,10 @@
     </div>
 
     <label for="post_url">Ссылка на пост (необязательно) — из неё возьмём id</label>
-    <input id="post_url" placeholder="https://t.me/Hollywool/15353 или vk.com/wall-94246095_18952">
+    <input id="post_url" placeholder="https://t.me/Hollywool/15353, vk.com/wall-94246095_18952 или dzen.ru/a/...">
 
     <label for="content">utm_content (id поста) — оставьте пустым для авто</label>
-    <input id="content" placeholder="авто: tg15353 / vk18952 / telegram20260629…">
+    <input id="content" placeholder="авто: tg15353 / vk18952 / dzen… / telegram20260629…">
 
     <button type="submit">Сгенерировать ссылку</button>
   </form>
@@ -98,7 +99,7 @@
 </main>
 
 <script>
-const SOURCES = ["vk","telegram","max","instagram","youtube"];
+const SOURCES = ["vk","telegram","max","instagram","youtube","dzen"];
 
 function buildUtmUrl(url, {source, medium="social", campaign="hollywool", content, term}={}) {
   let raw = (url || "").trim();
@@ -119,6 +120,12 @@ function extractPostId(postUrl) {
   if (m) return "tg" + m[1];
   m = postUrl.match(/wall-?\d+_(\d+)/);
   if (m) return "vk" + m[1];
+  m = postUrl.match(/(?:dzen\.ru|zen\.yandex\.ru)\/video\/watch\/([0-9a-fA-F]{24})/);
+  if (m) return "dzen" + m[1].slice(0, 12);
+  m = postUrl.match(/(?:dzen\.ru|zen\.yandex\.ru)\/a\/([A-Za-z0-9_-]+)/);
+  if (m) return "dzen" + m[1];
+  m = postUrl.match(/(?:dzen\.ru|zen\.yandex\.ru)\/[^?]*\/posts\/(\d+)/);
+  if (m) return "dzen" + m[1];
   return null;
 }
 
